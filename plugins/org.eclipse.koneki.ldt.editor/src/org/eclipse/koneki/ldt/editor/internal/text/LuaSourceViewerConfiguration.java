@@ -12,6 +12,11 @@
 
 package org.eclipse.koneki.ldt.editor.internal.text;
 
+import java.util.Arrays;
+
+import org.eclipse.core.runtime.NullProgressMonitor;
+import org.eclipse.dltk.internal.ui.text.ScriptCompositeReconcilingStrategy;
+import org.eclipse.dltk.internal.ui.text.ScriptReconciler;
 import org.eclipse.dltk.ui.text.AbstractScriptScanner;
 import org.eclipse.dltk.ui.text.IColorManager;
 import org.eclipse.dltk.ui.text.ScriptPresentationReconciler;
@@ -27,12 +32,17 @@ import org.eclipse.jface.text.contentassist.ContentAssistant;
 import org.eclipse.jface.text.contentassist.IContentAssistProcessor;
 import org.eclipse.jface.text.presentation.IPresentationReconciler;
 import org.eclipse.jface.text.presentation.PresentationReconciler;
+import org.eclipse.jface.text.reconciler.IReconciler;
+import org.eclipse.jface.text.reconciler.IReconcilingStrategy;
 import org.eclipse.jface.text.rules.DefaultDamagerRepairer;
 import org.eclipse.jface.text.source.ISourceViewer;
 import org.eclipse.jface.util.PropertyChangeEvent;
 import org.eclipse.koneki.ldt.editor.completion.LuaCompletionProcessor;
 import org.eclipse.koneki.ldt.parser.LuaConstants;
+import org.eclipse.ui.editors.text.EditorsUI;
 import org.eclipse.ui.texteditor.ITextEditor;
+import org.eclipse.ui.texteditor.spelling.SpellingReconcileStrategy;
+import org.eclipse.ui.texteditor.spelling.SpellingService;
 
 public class LuaSourceViewerConfiguration extends ScriptSourceViewerConfiguration {
 
@@ -154,5 +164,33 @@ public class LuaSourceViewerConfiguration extends ScriptSourceViewerConfiguratio
 	@Override
 	public String[] getConfiguredContentTypes(final ISourceViewer sourceViewer) {
 		return ILuaPartitions.LUA_PARTITION_TYPES;
+	}
+
+	/**
+	 * @see org.eclipse.dltk.ui.text.ScriptSourceViewerConfiguration#getReconciler(org.eclipse.jface.text.source.ISourceViewer)
+	 */
+	@Override
+	public IReconciler getReconciler(final ISourceViewer sourceViewer) {
+		final ITextEditor editor = getEditor();
+		if (editor != null && editor.isEditable()) {
+			ScriptCompositeReconcilingStrategy strategy = new ScriptCompositeReconcilingStrategy(editor,
+					getConfiguredDocumentPartitioning(sourceViewer)) {
+				@Override
+				public void setReconcilingStrategies(IReconcilingStrategy[] strategies) {
+					IReconcilingStrategy[] irs = Arrays.copyOf(strategies, strategies.length + 1);
+					SpellingService spellingService = EditorsUI.getSpellingService();
+					irs[strategies.length] = new SpellingReconcileStrategy(sourceViewer, spellingService);
+					super.setReconcilingStrategies(irs);
+				}
+			};
+			ScriptReconciler reconciler = new ScriptReconciler(editor, strategy, false);
+			reconciler.setIsAllowedToModifyDocument(false);
+			reconciler.setIsIncrementalReconciler(false);
+			reconciler.setProgressMonitor(new NullProgressMonitor());
+			reconciler.setDelay(500);
+
+			return reconciler;
+		}
+		return null;
 	}
 }
